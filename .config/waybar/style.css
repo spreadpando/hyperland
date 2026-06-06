@@ -1,0 +1,111 @@
+/* Waybar style — matching polybar pando theme */
+/* Colors from polybar pando/colors.ini:
+ *   background:     #001A1F23 (transparent dark)
+ *   background-alt: #550C2F2C (semi-transparent teal)
+ *   foreground:     #C4C7C5
+ *   sep:            #2A3338
+ */
+
+@define-color bg rgba(26, 31, 35, 0.0);
+@define-color bg-alt rgba(12, 47, 44, 0.33);
+@define-color fg #C4C7C5;
+@define-color pink #9A5C7D;
+@define-color red #B88A8A;
+
+* {
+    font-family: "Hack Nerd Font", "Iosevka Nerd Font", "feather", sans-serif;
+    font-size: 13px;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+}
+
+window#waybar {
+    background-color: @bg;
+    color: @fg;
+}
+
+/* --- Module backgrounds (alt-bg sections) --- */
+
+#workspaces,
+#cpu,
+#custom-gpu,
+#memory,
+#disk,
+#disk-ssd2,
+#clock,
+#window,
+#pulseaudio,
+#tray,
+#custom-powermenu {
+    background-color: @bg-alt;
+    padding: 0 6px;
+}
+
+/* --- Diagonal powerline decorators --- */
+/* decor-close (U+E0B8): fg=bg-alt draws the alt-bg color, bg=transparent */
+/* decor-open  (U+E0BA): fg=bg-alt draws the alt-bg color, bg=transparent */
+
+#custom-decor-close,
+#custom-decor-close-center {
+    font-family: "Iosevka Nerd Font";
+    font-size: 20px;
+    color: rgba(12, 47, 44, 0.33);
+    background-color: @bg;
+    padding: 0;
+    margin: 0;
+}
+
+#custom-decor-open,
+#custom-decor-open-right {
+    font-family: "Iosevka Nerd Font";
+    font-size: 20px;
+    color: rgba(12, 47, 44, 0.33);
+    background-color: @bg;
+    padding: 0;
+    margin: 0;
+}
+
+/* --- Workspaces --- */
+
+#workspaces button {
+    padding: 0 4px;
+    color: @fg;
+    background: transparent;
+    box-shadow: none;
+}
+
+#workspaces button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+}
+
+#workspaces button.active {
+    color: @pink;
+}
+
+#workspaces button.urgent {
+    color: @red;
+}
+
+/* --- Right modules --- */
+
+#pulseaudio.muted {
+    color: #2A3338;
+}
+
+#tray {
+    padding: 0 8px;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+}
+
+#custom-powermenu {
+    padding: 0 8px;
+}
