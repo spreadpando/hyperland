@@ -3,28 +3,28 @@
 -- https://wiki.hypr.land/Configuring/Start/
 
 
+--------------------------
+---- PER-MACHINE CONFIG ----
+--------------------------
+
+-- monitors, GPU and workspace pinning live in ~/.config/hypr/local.lua (not in git);
+-- see local.example.lua. Without it: auto-placed monitors, no NVIDIA env, no wallpaper span.
+local localConf = {}
+do
+    local path = os.getenv("HOME") .. "/.config/hypr/local.lua"
+    local fh = io.open(path, "r")
+    if fh then
+        fh:close()
+        localConf = dofile(path) or {}
+    end
+end
+
+
 ------------------
 ---- MONITORS ----
 ------------------
 
--- Dual KTC H27T22S 2560x1440 — left portrait, right landscape (matching i3/xrandr layout)
--- transform 1 = rotate left (90°)
-local monitors = {
-    {
-        output    = "DP-4",
-        mode      = "2560x1440@180",
-        position  = "0x0",
-        scale     = 1,
-        transform = 1,
-    },
-    {
-        output    = "DP-3",
-        mode      = "2560x1440@180",
-        position  = "1440x560",
-        scale     = 1,
-        transform = 0,
-    },
-}
+local monitors = localConf.monitors or {}
 
 for _, m in ipairs(monitors) do
     hl.monitor({
@@ -36,14 +36,75 @@ for _, m in ipairs(monitors) do
     })
 end
 
+if #monitors == 0 then
+    hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })
+end
+
 
 -----------------------
 ---- WALLPAPER SPAN ---
 -----------------------
 
-local wallpaper = "~/Pictures/wallpapers/art002e009301~orig.jpg"
+-- wallpaper path comes from ~/.config/theme.conf (single source; see ~/.dotfiles/theme)
+local function readThemeConf(key)
+    local fh = io.open(os.getenv("HOME") .. "/.config/theme.conf", "r")
+    if not fh then return nil end
+    local val
+    for line in fh:lines() do
+        val = line:match("^%s*" .. key .. "%s*=%s*(.-)%s*$")
+        if val then break end
+    end
+    fh:close()
+    return val
+end
+local wallpaper = readThemeConf("wallpaper") or "~/Pictures/wallpapers/dancing-lion.png"
 local cacheDir  = os.getenv("HOME") .. "/.cache/hyprpaper"
 local confPath  = os.getenv("HOME") .. "/.config/hypr/hyprpaper.conf"
+
+-- a video wallpaper (mp4/mkv/webm/mov) is cropped with ffmpeg and played by mpvpaper
+-- instead of hyprpaper; everything else goes through magick + hyprpaper as before
+local videoExts = { mp4 = true, mkv = true, webm = true, mov = true }
+local isVideo   = videoExts[(wallpaper:match("%.(%w+)$") or ""):lower()] or false
+local wallExt   = isVideo and "mp4" or "png"
+local wallSpeed = tonumber(readThemeConf("wallpaper_speed")) or 1
+
+-- commands that put the cached per-monitor files on screen (used on start and on reload)
+local function wallpaperDaemonCmds()
+    if not isVideo then return { "hyprpaper" } end
+    local cmds = {}
+    for _, m in ipairs(monitors) do
+        cmds[#cmds + 1] = string.format(
+            "mpvpaper -o 'no-audio loop-file=inf speed=%s' %s '%s/%s.%s'",
+            wallSpeed, m.output, cacheDir, m.output, wallExt
+        )
+    end
+    return cmds
+end
+
+-- (re)launch the daemon when its command line changed since last run (e.g. a new
+-- wallpaper_speed) or when the caller forces it after regenerating the crops.
+-- Kills both daemons so switching image <-> video doesn't leave the old one behind.
+local function restartWallpaperDaemon(force)
+    local cmds     = wallpaperDaemonCmds()
+    local cmdStr   = table.concat(cmds, "\n")
+    local cmdFile  = cacheDir .. "/.daemon"
+    if not force then
+        local f = io.open(cmdFile, "r")
+        if f then
+            local prev = f:read("*a")
+            f:close()
+            if prev == cmdStr then return end
+        end
+    end
+    -- SIGKILL: hyprpaper blocks SIGTERM, so a plain killall leaves it running
+    os.execute("killall -q -KILL hyprpaper mpvpaper")
+    for _, cmd in ipairs(cmds) do
+        os.execute(cmd .. " &")
+    end
+    local f = io.open(cmdFile, "w")
+    f:write(cmdStr)
+    f:close()
+end
 
 local function generateWallpaper()
     local home = os.getenv("HOME")
@@ -83,46 +144,78 @@ local function generateWallpaper()
     if f then
         local prev = f:read("*a")
         f:close()
-        if prev == hashStr then return end
+        if prev == hashStr then
+            restartWallpaperDaemon(false)
+            return
+        end
     end
 
     os.execute("mkdir -p " .. cacheDir)
 
-    local fullPath = cacheDir .. "/full.png"
-    os.execute(string.format(
-        "magick '%s' -resize %dx%d^ -gravity center -extent %dx%d '%s'",
-        src, dw, dh, dw, dh, fullPath
-    ))
-
-    for _, m in ipairs(monitors) do
-        local cropPath = cacheDir .. "/" .. m.output .. ".png"
+    if isVideo then
+        -- single ffmpeg pass: cover-scale to the full span, then split and crop one
+        -- stream per monitor (same geometry as the magick path below)
+        local filters = { string.format(
+            "[0:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,split=%d",
+            dw, dh, dw, dh, #monitors
+        ) }
+        for i in ipairs(monitors) do
+            filters[1] = filters[1] .. string.format("[s%d]", i)
+        end
+        local outputs = {}
+        for i, m in ipairs(monitors) do
+            filters[#filters + 1] = string.format(
+                "[s%d]crop=%d:%d:%d:%d[o%d]", i, m.ew, m.eh, m.ex, m.ey, i
+            )
+            outputs[#outputs + 1] = string.format(
+                "-map '[o%d]' -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p -an '%s/%s.%s'",
+                i, cacheDir, m.output, wallExt
+            )
+        end
         os.execute(string.format(
-            "magick '%s' -crop %dx%d+%d+%d +repage '%s'",
-            fullPath, m.ew, m.eh, m.ex, m.ey, cropPath
+            "ffmpeg -y -loglevel error -i '%s' -filter_complex \"%s\" %s",
+            src, table.concat(filters, ";"), table.concat(outputs, " ")
         ))
-    end
+    else
+        local fullPath = cacheDir .. "/full.png"
+        os.execute(string.format(
+            "magick '%s' -resize %dx%d^ -gravity center -extent %dx%d '%s'",
+            src, dw, dh, dw, dh, fullPath
+        ))
 
-    -- write hyprpaper.conf
-    f = io.open(confPath, "w")
-    for _, m in ipairs(monitors) do
-        f:write(string.format(
-            "wallpaper {\n    monitor = %s\n    path = %s/%s.png\n    fit_mode = cover\n}\n\n",
-            m.output, cacheDir, m.output
-        ))
+        for _, m in ipairs(monitors) do
+            local cropPath = cacheDir .. "/" .. m.output .. ".png"
+            os.execute(string.format(
+                "magick '%s' -crop %dx%d+%d+%d +repage '%s'",
+                fullPath, m.ew, m.eh, m.ex, m.ey, cropPath
+            ))
+        end
+
+        -- write hyprpaper.conf
+        f = io.open(confPath, "w")
+        for _, m in ipairs(monitors) do
+            f:write(string.format(
+                "wallpaper {\n    monitor = %s\n    path = %s/%s.png\n    fit_mode = cover\n}\n\n",
+                m.output, cacheDir, m.output
+            ))
+        end
+        f:write("splash = false\n")
+        f:close()
     end
-    f:write("splash = false\n")
-    f:close()
 
     -- write hash
     f = io.open(hashFile, "w")
     f:write(hashStr)
     f:close()
 
-    -- restart hyprpaper if it's already running (e.g. on reload)
-    os.execute("killall hyprpaper 2>/dev/null; hyprpaper &")
+    -- crops changed, so the running daemon (if any) is showing stale files
+    restartWallpaperDaemon(true)
 end
 
-generateWallpaper()
+-- the span crop needs real geometry, so it only runs once local.lua lists monitors
+if #monitors > 0 then
+    generateWallpaper()
+end
 
 
 ---------------------
@@ -140,12 +233,13 @@ local menuRun     = "rofi -show run"
 -------------------
 
 hl.on("hyprland.start", function()
-    hl.exec_cmd("hyprpaper")
+    for _, cmd in ipairs(wallpaperDaemonCmds()) do
+        hl.exec_cmd(cmd)
+    end
     hl.exec_cmd("waybar")
     hl.exec_cmd("dunst")
     hl.exec_cmd("nm-applet --indicator")
     hl.exec_cmd("blueman-applet")
-    hl.exec_cmd("pasystray")
     hl.exec_cmd("/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
 end)
 
@@ -157,18 +251,30 @@ end)
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
--- NVIDIA (RTX 5080 / Blackwell) — see https://wiki.hypr.land/Nvidia/
+-- Qt apps -> qt6ct (session-wide so GUI-launched apps get it, not just terminal).
+-- GTK is themed via settings.ini/dconf; see ~/.dotfiles/theme.
+hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
+
+-- NVIDIA — see https://wiki.hypr.land/Nvidia/  (enabled by `nvidia = true` in local.lua)
 -- Requires the OPEN kernel modules (nvidia-open-dkms) on 50-series.
 -- Driver 555+ gives explicit sync, which kills almost all Wayland flicker/stutter.
-hl.env("LIBVA_DRIVER_NAME", "nvidia")
-hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
--- VRR / G-Sync allowance for fullscreen games (pairs with misc.vrr = 2 below).
-hl.env("__GL_GSYNC_ALLOWED", "1")
-hl.env("__GL_VRR_ALLOWED", "1")
--- Optional, only if you use HW video decode and have nvidia-vaapi-driver installed:
--- hl.env("NVD_BACKEND", "direct")
--- Optional, can speed up GBM but is known to break some Electron/Firefox apps; try if needed:
--- hl.env("GBM_BACKEND", "nvidia-drm")
+if localConf.nvidia then
+    -- hardware video decode; needs libva-nvidia-driver
+    hl.env("LIBVA_DRIVER_NAME", "nvidia")
+    hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
+    -- VRR / G-Sync allowance for fullscreen games (pairs with misc.vrr = 2 below).
+    hl.env("__GL_GSYNC_ALLOWED", "1")
+    hl.env("__GL_VRR_ALLOWED", "1")
+    -- Optional, pairs with libva-nvidia-driver for direct HW decode:
+    -- hl.env("NVD_BACKEND", "direct")
+    -- Optional, can speed up GBM but is known to break some Electron/Firefox apps; try if needed:
+    -- hl.env("GBM_BACKEND", "nvidia-drm")
+end
+
+-- any extra per-machine env from local.lua
+for k, v in pairs(localConf.env or {}) do
+    hl.env(k, tostring(v))
+end
 
 -- Proton: set session-wide so you DON'T need per-game Steam launch options.
 -- Fixes borderless-fullscreen sizing and mouse click-through in Wine/Proton games.
@@ -205,7 +311,7 @@ hl.config({
         rounding_power = 2,
 
         active_opacity   = 1.0,
-        inactive_opacity = 1.0,
+        inactive_opacity = 0.7,
 
         shadow = {
             enabled      = true,
@@ -392,8 +498,10 @@ hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = tr
 ---- WINDOWS AND WORKSPACES ----
 --------------------------------
 
--- Bind workspace 1 to left monitor (portrait), matching i3: workspace $ws1 output DP-0
-hl.workspace_rule({ workspace = "1", monitor = "DP-4" })
+-- Pin workspaces to outputs (from local.lua, e.g. { ["1"] = "DP-4" })
+for ws, output in pairs(localConf.workspaces or {}) do
+    hl.workspace_rule({ workspace = tostring(ws), monitor = output })
+end
 
 -- Window rules
 hl.window_rule({

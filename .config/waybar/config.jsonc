@@ -1,7 +1,7 @@
 // Waybar config — matching polybar pando theme
 {
     "position": "bottom",
-    "height": 24,
+    "height": 26,
     "spacing": 0,
 
     "modules-left": [
@@ -92,7 +92,7 @@
         "format-icons": {
             "default": ["󰕟", "󰕠", "󰕞"]
         },
-        "on-click": "pamixer -t",
+        "on-click": "~/.config/rofi/scripts/sink-switcher.sh",
         "on-click-right": "pavucontrol",
         "on-scroll-up": "pamixer -i 5",
         "on-scroll-down": "pamixer -d 5"
