@@ -286,7 +286,7 @@ hl.env("PROTON_NO_WM_DECORATION", "1")
 hl.config({
     general = {
         gaps_in  = 5,
-        gaps_out = 10,
+        gaps_out = { top = 0, right = 10, bottom = 0, left = 10 }, -- flush against the waybars
 
         border_size = 2,
 
