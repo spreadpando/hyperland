@@ -1,3 +1,6 @@
+/* font-family comes from theme.conf (bar_font) via theme-apply */
+@import url("theme-fonts.css");
+
 /* Waybar style — matching polybar pando theme */
 /* Colors from polybar pando/colors.ini:
  *   background:     #001A1F23 (transparent dark)
@@ -7,14 +10,13 @@
  */
 
 @define-color bg rgba(26, 31, 35, 0.0);
-@define-color bg-alt rgba(12, 47, 44, 0.33);
+@define-color bg-alt rgba(5, 19, 18, 0.73);
 @define-color fg #C4C7C5;
 @define-color pink #9A5C7D;
 @define-color red #B88A8A;
 
 * {
-    font-family: "Hack Nerd Font", "Iosevka Nerd Font", "feather", sans-serif;
-    font-size: 13px;
+    font-size: 15px;
     min-height: 0;
     border: none;
     border-radius: 0;
@@ -48,9 +50,9 @@ window#waybar {
 
 #custom-decor-close,
 #custom-decor-close-center {
-    font-family: "Iosevka Nerd Font";
+    font-family: "Lilex Nerd Font", "Hack Nerd Font";
     font-size: 20px;
-    color: rgba(12, 47, 44, 0.33);
+    color: rgba(5, 19, 18, 0.73);
     background-color: @bg;
     padding: 0;
     margin: 0;
@@ -58,9 +60,9 @@ window#waybar {
 
 #custom-decor-open,
 #custom-decor-open-right {
-    font-family: "Iosevka Nerd Font";
+    font-family: "Lilex Nerd Font", "Hack Nerd Font";
     font-size: 20px;
-    color: rgba(12, 47, 44, 0.33);
+    color: rgba(5, 19, 18, 0.73);
     background-color: @bg;
     padding: 0;
     margin: 0;
@@ -108,4 +110,22 @@ window#waybar {
 
 #custom-powermenu {
     padding: 0 8px;
+}
+
+/* --- Clock: slightly larger than the rest of the bar --- */
+
+#clock {
+    font-size: 16px;
+}
+
+/* --- Title bar: hide it entirely on empty workspaces --- */
+
+window#waybar.title.empty #custom-decor-open,
+window#waybar.title.empty #custom-decor-close {
+    opacity: 0;
+}
+
+window#waybar.title.empty #window {
+    background-color: transparent;
+    padding: 0;
 }

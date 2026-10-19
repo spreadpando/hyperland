@@ -153,6 +153,7 @@
     #   %n  progress value if set without any extra characters
     #   %%  Literal %
     # Markup is allowed
+    # overridden by dunstrc.d/50-theme-fonts.conf (theme-apply, bar_font)
     format = "<b>%s</b>\n%b"
 
     # Alignment of message text.

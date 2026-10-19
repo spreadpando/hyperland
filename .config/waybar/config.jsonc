@@ -1,7 +1,9 @@
 // Waybar config — matching polybar pando theme
+// Two bars: main bar on the bottom, focused-window title on top
+[
 {
     "position": "bottom",
-    "height": 26,
+    "height": 27,
     "spacing": 0,
 
     "modules-left": [
@@ -16,7 +18,6 @@
     "modules-center": [
         "custom/decor-open",
         "clock",
-        "hyprland/window",
         "custom/decor-close#center"
     ],
     "modules-right": [
@@ -44,53 +45,49 @@
 
     "cpu": {
         "interval": 1,
-        "format": "<span color='#B89C7A'></span> {usage}%",
+        "format": "<span color='#B89C7A'></span> {usage}%",
         "tooltip": false
     },
 
     "custom/gpu": {
         "exec": "~/.config/waybar/gpu-usage.sh",
         "interval": 1,
-        "format": "<span color='#7D7DB8'></span> {}%",
+        "format": "<span color='#7D7DB8'></span> {}%",
         "tooltip": false
     },
 
     "memory": {
         "interval": 1,
-        "format": "<span color='#7A9CB8'></span> {used:0.0f} MB",
+        "format": "<span color='#7A9CB8'></span> {used:0.0f} MB",
         "tooltip-format": "{used:0.1f} GiB / {total:0.1f} GiB"
     },
 
     "disk": {
         "interval": 30,
-        "format": "<span color='#B87A7A'></span> / {free}",
+        "format": "<span color='#B87A7A'></span> / {specific_free:0.0f} GB",
+        "unit": "GB",
         "path": "/"
     },
 
     "disk#ssd2": {
         "interval": 30,
-        "format": "<span color='#B87A7A'></span> ssd2 {free}",
+        "format": "<span color='#B87A7A'></span> ssd2 {specific_free:0.0f} GB",
+        "unit": "GB",
         "path": "/mnt/ssd2"
     },
 
     "clock": {
         "interval": 1,
-        "format": "<span color='#B88A8A'></span> {:%c}",
-        "format-alt": "<span color='#B88A8A'></span> {:%A, %d %B %Y}",
+        "format": "{:%c}",
+        "format-alt": "{:%A, %d %B %Y}",
         "tooltip-format": "<big>{:%Y %B}</big>\n<tt><small>{calendar}</small></tt>"
-    },
-
-    "hyprland/window": {
-        "format": " {}",
-        "max-length": 55,
-        "separate-outputs": true
     },
 
     "pulseaudio": {
         "format": "{icon} {volume}%",
-        "format-muted": "󰕟 Muted",
+        "format-muted": "󰝟 Muted",
         "format-icons": {
-            "default": ["󰕟", "󰕠", "󰕞"]
+            "default": ["󰕿", "󰖀", "󰕾"]
         },
         "on-click": "~/.config/rofi/scripts/sink-switcher.sh",
         "on-click-right": "pavucontrol",
@@ -104,7 +101,7 @@
     },
 
     "custom/powermenu": {
-        "format": "<span color='#B88A8A'>襤</span>",
+        "format": "<span color='#B88A8A'>󰐥</span>",
         "on-click": "~/.config/rofi/powermenu/type-1/powermenu.sh",
         "tooltip": false
     },
@@ -128,4 +125,39 @@
         "format": "",
         "tooltip": false
     }
+},
+
+// Title bar — centered focused-window label, one per output
+{
+    "name": "title",
+    "position": "top",
+    "height": 27,
+    "spacing": 0,
+
+    "modules-center": [
+        "custom/decor-open#top",
+        "hyprland/window",
+        "custom/decor-close#top"
+    ],
+
+    "hyprland/window": {
+        "format": "{}",
+        // strip leading status symbols apps put in titles (e.g. Claude Code's ✳ / spinner)
+        "rewrite": {
+            "^[^\\x00-\\x7F]+ (.*)$": "$1"
+        },
+        "max-length": 55,
+        "separate-outputs": true
+    },
+
+    "custom/decor-open#top": {
+        "format": "",
+        "tooltip": false
+    },
+
+    "custom/decor-close#top": {
+        "format": "",
+        "tooltip": false
+    }
 }
+]
