@@ -3,37 +3,34 @@
 -- https://wiki.hypr.land/Configuring/Start/
 
 
---------------------------
----- PER-MACHINE CONFIG ----
---------------------------
-
--- monitors, GPU and workspace pinning live in ~/.config/hypr/local.lua (not in git);
--- see local.example.lua. Without it: auto-placed monitors, no NVIDIA env, no wallpaper span.
-local localConf = {}
-do
-    local path = os.getenv("HOME") .. "/.config/hypr/local.lua"
-    local fh = io.open(path, "r")
-    if fh then
-        fh:close()
-        localConf = dofile(path) or {}
-    end
-end
-
-
 ------------------
 ---- MONITORS ----
 ------------------
 
-local monitors = localConf.monitors or {}
+-- Per-machine layout lives in ~/.config/hypr/monitors.lua and workspaces.lua (not in git),
+-- written by nwg-displays — or any tool / hand-written hl.monitor and hl.workspace_rule calls.
+-- Without monitors.lua: auto-placed monitors, no wallpaper span.
+local hyprDir = os.getenv("HOME") .. "/.config/hypr/"
 
-for _, m in ipairs(monitors) do
-    hl.monitor({
-        output    = m.output,
-        mode      = m.mode,
-        position  = m.position,
-        scale     = tostring(m.scale),
-        transform = m.transform,
-    })
+local function loadOptional(name)
+    local path = hyprDir .. name
+    local fh = io.open(path, "r")
+    if not fh then return end
+    fh:close()
+    local ok, err = pcall(dofile, path)
+    if not ok then print(name .. ": " .. tostring(err)) end
+end
+
+-- each hl.monitor call is recorded so the wallpaper span below sees the same geometry
+local monitors = {}
+do
+    local apply = hl.monitor
+    hl.monitor = function(m)
+        monitors[#monitors + 1] = m
+        return apply(m)
+    end
+    loadOptional("monitors.lua")
+    hl.monitor = apply
 end
 
 if #monitors == 0 then
@@ -212,7 +209,7 @@ local function generateWallpaper()
     restartWallpaperDaemon(true)
 end
 
--- the span crop needs real geometry, so it only runs once local.lua lists monitors
+-- the span crop needs real geometry, so it only runs once monitors.lua lists monitors
 if #monitors > 0 then
     generateWallpaper()
 end
@@ -255,10 +252,12 @@ hl.env("HYPRCURSOR_SIZE", "24")
 -- GTK is themed via settings.ini/dconf; see ~/.dotfiles/theme.
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
 
--- NVIDIA — see https://wiki.hypr.land/Nvidia/  (enabled by `nvidia = true` in local.lua)
+-- NVIDIA — see https://wiki.hypr.land/Nvidia/  (enabled when the nvidia kernel driver is loaded)
 -- Requires the OPEN kernel modules (nvidia-open-dkms) on 50-series.
 -- Driver 555+ gives explicit sync, which kills almost all Wayland flicker/stutter.
-if localConf.nvidia then
+local nvidiaDriver = io.open("/proc/driver/nvidia/version", "r")
+if nvidiaDriver then
+    nvidiaDriver:close()
     -- hardware video decode; needs libva-nvidia-driver
     hl.env("LIBVA_DRIVER_NAME", "nvidia")
     hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
@@ -269,11 +268,6 @@ if localConf.nvidia then
     -- hl.env("NVD_BACKEND", "direct")
     -- Optional, can speed up GBM but is known to break some Electron/Firefox apps; try if needed:
     -- hl.env("GBM_BACKEND", "nvidia-drm")
-end
-
--- any extra per-machine env from local.lua
-for k, v in pairs(localConf.env or {}) do
-    hl.env(k, tostring(v))
 end
 
 -- Proton: set session-wide so you DON'T need per-game Steam launch options.
@@ -498,10 +492,8 @@ hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("playerctl previous"),   { locked = tr
 ---- WINDOWS AND WORKSPACES ----
 --------------------------------
 
--- Pin workspaces to outputs (from local.lua, e.g. { ["1"] = "DP-4" })
-for ws, output in pairs(localConf.workspaces or {}) do
-    hl.workspace_rule({ workspace = tostring(ws), monitor = output })
-end
+-- Pin workspaces to outputs (workspaces.lua, from nwg-displays)
+loadOptional("workspaces.lua")
 
 -- Window rules
 hl.window_rule({

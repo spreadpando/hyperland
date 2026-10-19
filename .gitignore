@@ -1,2 +1,3 @@
-local.lua
-.config/hypr/local.lua
+# per-machine, written by nwg-displays
+.config/hypr/monitors.*
+.config/hypr/workspaces.*
